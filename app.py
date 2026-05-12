@@ -1,9 +1,19 @@
 import streamlit as st
 from pypdf import PdfReader
+import os
+from dotenv import load_dotenv
 
+from openai import OpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+
+load_dotenv()
+
+client = OpenAI(
+    api_key=os.getenv("GROQ_API_KEY"),
+    base_url="https://api.groq.com/openai/v1"
+)
 
 st.title("📄 PDF Chatbot - Day 3")
 
@@ -65,10 +75,47 @@ if uploaded_file:
             k=3
         )
 
-        st.subheader("Retrieved Chunks")
+        # Combine retrieved chunks
+        context = "\n\n".join(
+            [doc.page_content for doc in docs]
+        )
 
-        for i, doc in enumerate(docs):
+        # -----------------------------
+        # Prompt
+        # -----------------------------
+        prompt = f"""
+You are a document QA assistant.
 
-            st.write(f"### Chunk {i+1}")
-            st.write(doc.page_content)
-            st.write("-------------------")
+Use ONLY the provided context to answer the question.
+If the answer is not in the context, say "I don't know."
+
+Context:
+{context}
+
+Question:
+{question}
+
+Answer:
+"""
+
+        # -----------------------------
+        # LLM Call
+        # -----------------------------
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0
+        )
+
+        answer = response.choices[0].message.content
+
+        # -----------------------------
+        # Show Answer
+        # -----------------------------
+        st.subheader("AI Answer")
+        st.write(answer)
